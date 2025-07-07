@@ -10,18 +10,14 @@ function App() {
   const [input, setInput] = useState("");
   const [cargando, setCargando] = useState(false);
   const chatEndRef = useRef(null);
-  const [tool, setTool] = useState("auto");
-  const [temperatura, setTemperatura] = useState(0.75);
-  const [modelo, setModelo] = useState("qwen3:1.7b");
-
 
   useEffect(() => {
-    const hist = localStorage.getItem("historialChat");
+    const hist = localStorage.getItem("historialSolvy");
     if (hist) setHistorial(JSON.parse(hist));
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("historialChat", JSON.stringify(historial));
+    localStorage.setItem("historialSolvy", JSON.stringify(historial));
   }, [historial]);
 
   const enviarPregunta = async (e) => {
@@ -32,15 +28,10 @@ function App() {
     setCargando(true);
 
     try {
-      const res = await fetch("http://localhost:3001/api/chat", {
+      const res = await fetch("http://localhost:3000/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: input,
-          tool, // <-- agrega esto
-          modelo,
-          temperatura,
-        }),
+        body: JSON.stringify({ prompt: input }),
       });
       const data = await res.json();
       setHistorial((h) => [
@@ -63,7 +54,7 @@ function App() {
 
   return (
     <div style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif" }}>
-      <h2>🎓 Chat de Estudiantes</h2>
+      <h2>🛠️ Solvy - Asistente de Servicios</h2>
       <div style={{
         border: "1px solid #ccc", borderRadius: 8, padding: 16, minHeight: 300, background: "#fafbfc", overflowY: "auto"
       }}>
@@ -86,7 +77,7 @@ function App() {
                 : msg.texto}
             </span>
             {msg.tipo === "bot" && (
-              <span style={{ marginLeft: 8, fontWeight: "bold" }}>Estudiantly</span>
+              <span style={{ marginLeft: 8, fontWeight: "bold" }}>Solvy</span>
             )}
           </div>
         ))}
@@ -94,25 +85,13 @@ function App() {
         <div ref={chatEndRef} />
       </div>
       <form onSubmit={enviarPregunta} style={{ marginTop: 16, display: "flex" }}>
-        <select value={tool} onChange={e => setTool(e.target.value)}>
-          <option value="auto">Automático</option>
-          <option value="listarEstudiantes">Listar estudiantes</option>
-          <option value="buscarPorNombre">Buscar por nombre</option>
-          <option value="buscarPorApellido">Buscar por apellido</option>
-          <option value="agregarEstudiante">Agregar estudiante</option>
-        </select>
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="Escribí tu pregunta..."
+          placeholder="Describí tu problema en el hogar..."
           style={{ flex: 1, padding: 8, borderRadius: 8, border: "1px solid #ccc" }}
           disabled={cargando}
         />
-        <select value={modelo} onChange={e => setModelo(e.target.value)}>
-          <option value="qwen3:1.7b">qwen3:1.7b</option>
-          <option value="ollama">otro-modelo</option>
-        </select>
-        <input type="range" min="0" max="1" step="0.01" value={temperatura} onChange={e => setTemperatura(Number(e.target.value))} />
         <button type="submit" disabled={cargando || !input.trim()} style={{
           marginLeft: 8, padding: "8px 16px", borderRadius: 8, border: "none", background: "#0d6efd", color: "#fff"
         }}>
