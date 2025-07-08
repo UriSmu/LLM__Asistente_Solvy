@@ -21,36 +21,44 @@ function App() {
   }, [historial]);
 
   const enviarPregunta = async (e) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  e.preventDefault();
+  if (!input.trim()) return;
 
-    setHistorial((h) => [...h, { tipo: "user", texto: input }]);
-    setCargando(true);
+  setHistorial((h) => [...h, { tipo: "user", texto: input }]);
+  setCargando(true);
 
-    try {
-      const res = await fetch("http://localhost:3000/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: input }),
-      });
-      const data = await res.json();
-      setHistorial((h) => [
-        ...h,
-        {
-          tipo: "bot",
-          texto: limpiarPensamientos(data.result || data.error || "Error"),
-        },
-      ]);
-    } catch {
-      setHistorial((h) => [
-        ...h,
-        { tipo: "bot", texto: "Error de conexión con el backend" },
-      ]);
+  try {
+    const res = await fetch("http://localhost:3000/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prompt: input }), // Cambiar 'message' por 'prompt'
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
     }
-    setCargando(false);
-    setInput("");
-    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-  };
+
+    const data = await res.json();
+    setHistorial((h) => [
+      ...h,
+      {
+        tipo: "bot",
+        texto: limpiarPensamientos(data.result || data.error || "Error"),
+      },
+    ]);
+  } catch (error) {
+    console.error("Error:", error);
+    setHistorial((h) => [
+      ...h,
+      { tipo: "bot", texto: "Error de conexión con el backend" },
+    ]);
+  }
+  setCargando(false);
+  setInput("");
+  setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+};
 
   return (
     <div style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif" }}>
