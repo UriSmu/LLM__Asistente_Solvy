@@ -39,57 +39,94 @@ const ollamaLLM = new Ollama({
 });
 
 // Función para procesar mensajes directamente
+function esMensajeSoloGenerico(prompt) {
+  const frasesGenericas = [
+    "hola", "buenas", "buenos días", "buenas tardes", "buenas noches",
+    "saludos", "hey", "hello", "hi", "gracias", "te puedo preguntar algo", "puedo consultar", "consulta", "cómo estás", "qué tal"
+  ];
+  const texto = prompt.trim().toLowerCase();
+  return frasesGenericas.some(frase => texto === frase || texto === frase + "." || texto === frase + "?" || texto === frase + "!");
+}
+
 async function procesarMensaje(prompt) {
   try {
+    if (!prompt || esMensajeSoloGenerico(prompt)) {
+      return "¡Hola! ¿En qué puedo ayudarte? Por favor, contame tu problema o necesidad.";
+    }
+
     const servicios = await obtenerServicios();
-    
-    // Lógica simple de recomendación basada en palabras clave
-    let servicioRecomendado = null;
-    
-    // Mapeo de palabras clave a servicios
-    const palabrasClave = {
-      "plomería": ["agua", "caño", "canilla", "inodoro", "ducha", "pérdida", "filtración", "gotea", "gotera"],
-      "electricidad": ["luz", "electricidad", "cable", "enchufe", "interruptor", "corte"],
-      "gas": ["gas", "estufa", "calefón", "horno", "olor a gas"],
-      "limpieza": ["limpieza", "limpiar", "suciedad", "manchas", "desinfectar"],
-      "pintura": ["pintura", "pintar", "pared", "color", "barniz"],
-      "jardinería": ["jardín", "plantas", "césped", "poda", "riego"],
-      "carpintería": ["madera", "puerta", "ventana", "mueble", "cajón"],
-      "albañilería": ["pared", "ladrillo", "cemento", "construcción", "rajadura", "rompió"]
-    };
-    
-    // Buscar servicio basado en palabras clave
-    for (const [categoria, keywords] of Object.entries(palabrasClave)) {
-      if (keywords.some(keyword => prompt.toLowerCase().includes(keyword))) {
-        servicioRecomendado = servicios.find(s => 
-          s.name.toLowerCase().includes(categoria) || 
-          (s.description && s.description.toLowerCase().includes(categoria))
-        );
-        break;
+    let coincidenciasSubservicios = [];
+
+    // Buscar coincidencias en subservicios
+    for (const servicio of servicios) {
+      const subservicios = await obtenerSubservicios(servicio.idservicio);
+      for (const sub of subservicios) {
+        if (sub.palabrasclave) {
+          const palabras = sub.palabrasclave.toLowerCase().split(',').map(p => p.trim());
+          const coincidencias = palabras.filter(palabra => prompt.toLowerCase().includes(palabra)).length;
+          if (coincidencias > 0) {
+            coincidenciasSubservicios.push({
+              servicio,
+              subservicio: sub,
+              coincidencias
+            });
+          }
+        }
       }
     }
-    
-    if (!servicioRecomendado) {
-      servicioRecomendado = servicios[0]; // Servicio por defecto
-    }
-    
-    if (servicioRecomendado) {
-      const subservicios = await obtenerSubservicios(servicioRecomendado.id);
-      const subservicioRecomendado = subservicios[0] || null;
-      
-      let resultado = `Para tu problema: "${prompt}"\n\n`;
-      resultado += `Te recomiendo el servicio: **${servicioRecomendado.name}**\n`;
-      resultado += `Descripción: ${servicioRecomendado.description}\n\n`;
-      
-      if (subservicioRecomendado) {
-        resultado += `Subservicio recomendado: **${subservicioRecomendado.name}**\n`;
-        resultado += `Descripción: ${subservicioRecomendado.description}\n`;
+
+    // Ordenar por cantidad de coincidencias (mayor primero)
+    coincidenciasSubservicios.sort((a, b) => b.coincidencias - a.coincidencias);
+
+    if (coincidenciasSubservicios.length > 0) {
+      // Mostrar hasta 3 opciones relevantes
+      let resultado = `Para tu problema: "${prompt}"\n\nTe recomiendo estas opciones:\n`;
+      const mostrados = coincidenciasSubservicios.slice(0, 3);
+      for (const { servicio, subservicio } of mostrados) {
+        resultado += `- Servicio: **${servicio.nombre}** | Subservicio: **${subservicio.nombre}**`;
+        if (subservicio.descripcion) {
+          resultado += `\n  Descripción: ${subservicio.descripcion}`;
+        }
+        resultado += `\n`;
       }
-      
       return resultado;
     }
-    
-    return "No pude encontrar un servicio adecuado para tu problema. ¿Podrías describir más detalles?";
+
+    // Si no encontró en subservicios, buscar en servicios
+    let coincidenciasServicios = [];
+    for (const servicio of servicios) {
+      if (servicio.palabrasclave) {
+        const palabras = servicio.palabrasclave.toLowerCase().split(',').map(p => p.trim());
+        const coincidencias = palabras.filter(palabra => prompt.toLowerCase().includes(palabra)).length;
+        if (coincidencias > 0) {
+          coincidenciasServicios.push({
+            servicio,
+            coincidencias
+          });
+        }
+      }
+    }
+    coincidenciasServicios.sort((a, b) => b.coincidencias - a.coincidencias);
+
+    if (coincidenciasServicios.length > 0) {
+      const mejorServicio = coincidenciasServicios[0].servicio;
+      const subservicios = await obtenerSubservicios(mejorServicio.idservicio);
+      let resultado = `Para tu problema: "${prompt}"\n\nTe recomiendo el servicio: **${mejorServicio.nombre}**\n`;
+      if (subservicios.length > 0) {
+        resultado += `Algunos subservicios disponibles:\n`;
+        for (const sub of subservicios.slice(0, 3)) {
+          resultado += `- ${sub.nombre}`;
+          if (sub.descripcion) {
+            resultado += `\n  Descripción: ${sub.descripcion}`;
+          }
+          resultado += `\n`;
+        }
+      }
+      return resultado;
+    }
+
+    // Si no hay coincidencias, pedir más información
+    return "No pude identificar claramente el servicio que necesitás. ¿Podés darme más detalles?";
   } catch (error) {
     console.error("Error procesando mensaje:", error);
     return "Hubo un error al procesar tu solicitud. Por favor, intenta nuevamente.";
